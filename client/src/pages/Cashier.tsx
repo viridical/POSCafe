@@ -50,6 +50,16 @@ export default function Cashier({ onMenuClick }: CashierProps) {
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [paymentResultOpen, setPaymentResultOpen] = useState(false);
   const [paymentResult, setPaymentResult] = useState<any>(null);
+  const [successPopupOpen, setSuccessPopupOpen] = useState(false);
+  useEffect(() => {
+  if (!successPopupOpen) return;
+
+  const timer = window.setTimeout(() => {
+    setSuccessPopupOpen(false);
+  }, 2000);
+
+    return () => window.clearTimeout(timer);
+  }, [successPopupOpen]);
 
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
@@ -179,7 +189,7 @@ export default function Cashier({ onMenuClick }: CashierProps) {
       setCheckoutOpen(false);
 
       if (paymentMethod === "cash") {
-        setSuccess("Transaksi tunai berhasil dibuat.");
+        setSuccessPopupOpen(true);
         resetOrder();
       } else if (paymentMethod === "snap" && result.redirect_url) {
         setPaymentResultOpen(true);
@@ -578,6 +588,29 @@ export default function Cashier({ onMenuClick }: CashierProps) {
           </p>
         )}
       </Modal>
+      {successPopupOpen && (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4">
+        <div className="w-full max-w-sm animate-in zoom-in-95 rounded-2xl bg-white p-8 text-center shadow-2xl">
+          <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-green-100">
+          <CheckCircle2
+            size={45}
+            className="text-green-600"
+            strokeWidth={2.5} />
+          </div>
+          <h2 className="text-xl font-bold text-gray-900">
+          Pesanan Berhasil!
+          </h2>
+
+          <p className="mt-2 text-sm text-gray-500">
+          Transaksi berhasil dibuat.
+          </p>
+
+        <div className="mt-6 h-1.5 w-full overflow-hidden rounded-full bg-gray-100">
+          <div className="h-full w-full origin-left animate-[shrink_2s_linear_forwards] rounded-full bg-green-500" />
+          </div>
+        </div>
+      </div>
+    )}
     </div>
   );
 }
