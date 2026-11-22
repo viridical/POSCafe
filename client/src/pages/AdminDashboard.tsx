@@ -7,6 +7,7 @@ import {
   ArrowRight,
   RefreshCw,
 } from "lucide-react";
+
 import Header from "../components/Header";
 import StatCard from "../components/StatCard";
 import StatusBadge from "../components/StatusBadge";
@@ -30,32 +31,72 @@ export default function AdminDashboard({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  async function loadDashboard() {
+  async function loadDashboard(showLoading = false) {
     try {
-      setLoading(true);
+      if (showLoading) setLoading(true);
       setError("");
 
       const result: any = await getDashboard();
       const data = result.data || result;
 
+      // Backend mengirim statistik di dalam object statistics.
+      const statistics = data.statistics || data;
+
       setStats({
-        totalRevenue: Number(data.totalRevenue ?? data.total_revenue ?? 0),
-        totalTransactions: Number(
-          data.totalTransactions ?? data.total_transactions ?? 0
+        totalRevenue: Number(
+          statistics.total_revenue ??
+          statistics.totalRevenue ??
+          0
         ),
-        totalProducts: Number(data.totalProducts ?? data.total_products ?? 0),
-        totalStaff: Number(data.totalStaff ?? data.total_staff ?? 0),
-        recentOrders: data.recentOrders ?? data.recent_orders ?? [],
+        totalTransactions: Number(
+          statistics.total_transactions ??
+          statistics.totalTransactions ??
+          0
+        ),
+        totalProducts: Number(
+          data.total_products ??
+          data.totalProducts ??
+          0
+        ),
+        totalStaff: Number(
+          data.total_staff ??
+          data.totalStaff ??
+          0
+        ),
+        recentOrders:
+          data.recent_transactions ??
+          data.recentOrders ??
+          data.recent_orders ??
+          [],
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal memuat dashboard.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Gagal memuat dashboard."
+      );
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    loadDashboard();
+    loadDashboard(true);
+
+    // Perbarui dashboard setiap 30 detik.
+    const interval = window.setInterval(() => {
+      loadDashboard();
+    }, 30000);
+
+    // Perbarui ketika admin kembali membuka tab.
+    const handleFocus = () => loadDashboard();
+
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", handleFocus);
+    };
   }, []);
 
   return (
@@ -78,7 +119,7 @@ export default function AdminDashboard({
           </div>
 
           <button
-            onClick={loadDashboard}
+            onClick={() => loadDashboard(true)}
             className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50"
           >
             <RefreshCw size={16} />
@@ -160,21 +201,29 @@ export default function AdminDashboard({
                         <th className="px-5 py-4">Status</th>
                       </tr>
                     </thead>
+
                     <tbody className="divide-y divide-gray-100">
-                      {stats.recentOrders.map((order) => (
-                        <tr key={order.id} className="hover:bg-gray-50">
+                      {stats.recentOrders.map((order: any) => (
+                        <tr
+                          key={order.id || order.order_number}
+                          className="hover:bg-gray-50"
+                        >
                           <td className="px-5 py-4 font-semibold text-gray-800">
                             {order.order_number}
                           </td>
+
                           <td className="px-5 py-4 text-gray-600">
                             {order.customer_name || "Umum"}
                           </td>
+
                           <td className="px-5 py-4 text-gray-600">
                             {order.cashier || "-"}
                           </td>
+
                           <td className="px-5 py-4 font-semibold text-gray-800">
                             {formatRupiah(order.total_amount)}
                           </td>
+
                           <td className="px-5 py-4">
                             <StatusBadge status={order.payment_status} />
                           </td>

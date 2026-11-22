@@ -1,12 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
-import { Eye, RefreshCw, Receipt } from "lucide-react";
+import {
+  Eye,
+  RefreshCw,
+  Receipt,
+  Printer,
+} from "lucide-react";
+
 import Header from "../components/Header";
 import Modal from "../components/Modal";
 import SearchInput from "../components/SearchInput";
 import StatusBadge from "../components/StatusBadge";
 import Loading from "../components/Loading";
 import EmptyState from "../components/EmptyState";
-import { getOrders, getOrderDetail } from "../services/transactionService";
+
+import {
+  getOrders,
+  getOrderDetail,
+} from "../services/transactionService";
+
 import type { Order } from "../types";
 
 interface TransactionsProps {
@@ -16,12 +27,22 @@ interface TransactionsProps {
 const formatRupiah = (value: number) =>
   `Rp${Number(value || 0).toLocaleString("id-ID")}`;
 
+const escapeHtml = (value: unknown) =>
+  String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+
 export default function Transactions({ onMenuClick }: TransactionsProps) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("all");
+
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState("");
@@ -30,9 +51,15 @@ export default function Transactions({ onMenuClick }: TransactionsProps) {
     try {
       setLoading(true);
       setError("");
-      setOrders(await getOrders());
+
+      const data = await getOrders();
+      setOrders(Array.isArray(data) ? data : []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal memuat transaksi.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Gagal memuat transaksi."
+      );
     } finally {
       setLoading(false);
     }
@@ -49,9 +76,15 @@ export default function Transactions({ onMenuClick }: TransactionsProps) {
       setSelectedOrder(null);
 
       const result: any = await getOrderDetail(order.order_number);
+
       setSelectedOrder(result.data || result);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal memuat detail.");
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Gagal memuat detail."
+      );
+
       setDetailOpen(false);
     } finally {
       setDetailLoading(false);
@@ -77,6 +110,220 @@ export default function Transactions({ onMenuClick }: TransactionsProps) {
     });
   }, [orders, search, filter]);
 
+  function printInvoice() {
+    if (!selectedOrder) return;
+
+    const order = selectedOrder.order || selectedOrder;
+    const items = selectedOrder.items || [];
+
+    if (order.payment_status !== "paid") {
+      setError("Invoice hanya tersedia untuk transaksi yang sudah lunas.");
+      return;
+    }
+
+    const printWindow = window.open(
+      "",
+      "_blank",
+      "width=800,height=900"
+    );
+
+    if (!printWindow) {
+      setError("Popup cetak diblokir browser. Izinkan popup untuk POSCafe.");
+      return;
+    }
+
+    const itemRows = items.map((item: any) => {
+      const unitPrice = Number(item.unit_price ?? item.price ?? 0);
+      const quantity = Number(item.quantity || 0);
+      const subtotal = Number(
+        item.subtotal ?? unitPrice * quantity
+      );
+
+      return `
+        <tr>
+          <td>${escapeHtml(item.product_name || item.name)}</td>
+          <td class="center">${quantity}</td>
+          <td class="right">${formatRupiah(unitPrice)}</td>
+          <td class="right">${formatRupiah(subtotal)}</td>
+        </tr>
+      `;
+    }).join("");
+
+    const orderDate = order.created_at
+      ? new Date(order.created_at).toLocaleString("id-ID")
+      : "-";
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html lang="id">
+      <head>
+        <meta charset="UTF-8" />
+        <title>Invoice ${escapeHtml(order.order_number)}</title>
+
+        <style>
+          * {
+            box-sizing: border-box;
+          }
+
+          body {
+            font-family: Arial, sans-serif;
+            color: #222;
+            padding: 35px;
+            max-width: 800px;
+            margin: auto;
+          }
+
+          .header {
+            text-align: center;
+            border-bottom: 2px dashed #999;
+            padding-bottom: 20px;
+            margin-bottom: 20px;
+          }
+
+          .header h1 {
+            margin: 0 0 8px;
+            font-size: 26px;
+          }
+
+          .header p {
+            margin: 4px 0;
+            color: #666;
+            font-size: 13px;
+          }
+
+          .info {
+            display: flex;
+            justify-content: space-between;
+            gap: 20px;
+            margin-bottom: 25px;
+            font-size: 13px;
+          }
+
+          .info p {
+            margin: 7px 0;
+          }
+
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+          }
+
+          th {
+            background: #f3f3f3;
+            text-align: left;
+          }
+
+          th, td {
+            padding: 12px 8px;
+            border-bottom: 1px solid #ddd;
+          }
+
+          .center {
+            text-align: center;
+          }
+
+          .right {
+            text-align: right;
+          }
+
+          .total {
+            margin-top: 20px;
+            border-top: 2px solid #222;
+            padding-top: 15px;
+            text-align: right;
+            font-size: 19px;
+            font-weight: bold;
+          }
+
+          .payment {
+            margin-top: 15px;
+            font-size: 13px;
+            text-align: right;
+          }
+
+          .footer {
+            margin-top: 45px;
+            padding-top: 20px;
+            border-top: 1px dashed #999;
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+          }
+
+          @media print {
+            body {
+              padding: 0;
+            }
+          }
+        </style>
+      </head>
+
+      <body>
+        <div class="header">
+          <h1>POSCAFE</h1>
+          <p>INVOICE / STRUK PEMBELIAN</p>
+          <p>Terima kasih telah melakukan pembelian.</p>
+        </div>
+
+        <div class="info">
+          <div>
+            <p><strong>Nomor Order:</strong> ${escapeHtml(order.order_number)}</p>
+            <p><strong>Pelanggan:</strong> ${escapeHtml(order.customer_name || "Pelanggan Umum")}</p>
+            <p><strong>Kasir:</strong> ${escapeHtml(order.cashier || "-")}</p>
+          </div>
+
+          <div>
+            <p><strong>Tanggal:</strong> ${escapeHtml(orderDate)}</p>
+            <p><strong>Tipe:</strong> ${escapeHtml(order.order_type || "-")}</p>
+            <p><strong>Meja:</strong> ${escapeHtml(order.table_number || "-")}</p>
+          </div>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Produk</th>
+              <th class="center">Qty</th>
+              <th class="right">Harga</th>
+              <th class="right">Subtotal</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            ${itemRows}
+          </tbody>
+        </table>
+
+        <div class="total">
+          Total: ${formatRupiah(Number(order.total_amount || 0))}
+        </div>
+
+        <div class="payment">
+          <p>Metode Pembayaran: ${escapeHtml(order.payment_method || "-")}</p>
+          <p>Status Pembayaran: LUNAS</p>
+        </div>
+
+        <div class="footer">
+          <p>Invoice ini merupakan bukti transaksi POSCafe.</p>
+          <p>Terima kasih atas kunjungan Anda.</p>
+        </div>
+
+        <script>
+          window.onload = function() {
+            window.print();
+          };
+        </script>
+      </body>
+      </html>
+    `);
+
+    printWindow.document.close();
+    setError("");
+  }
+
+  const order = selectedOrder?.order || selectedOrder;
+
   return (
     <div>
       <Header
@@ -90,6 +337,7 @@ export default function Transactions({ onMenuClick }: TransactionsProps) {
           <h2 className="text-xl font-bold text-gray-900">
             Riwayat Transaksi
           </h2>
+
           <p className="mt-1 text-sm text-gray-500">
             Total {orders.length} transaksi tercatat.
           </p>
@@ -155,36 +403,39 @@ export default function Transactions({ onMenuClick }: TransactionsProps) {
                 </thead>
 
                 <tbody className="divide-y divide-gray-100">
-                  {filteredOrders.map((order) => (
-                    <tr key={order.id} className="hover:bg-gray-50">
+                  {filteredOrders.map((item) => (
+                    <tr
+                      key={item.id || item.order_number}
+                      className="hover:bg-gray-50"
+                    >
                       <td className="px-5 py-4 font-semibold text-gray-800">
-                        {order.order_number}
+                        {item.order_number}
                       </td>
 
                       <td className="px-5 py-4 text-gray-600">
-                        {order.customer_name || "Umum"}
+                        {item.customer_name || "Umum"}
                       </td>
 
                       <td className="px-5 py-4 text-gray-600">
-                        {order.cashier || "-"}
+                        {item.cashier || "-"}
                       </td>
 
                       <td className="px-5 py-4 uppercase text-gray-600">
-                        {order.payment_method}
+                        {item.payment_method}
                       </td>
 
                       <td className="px-5 py-4 font-semibold text-gray-800">
-                        {formatRupiah(order.total_amount)}
+                        {formatRupiah(Number(item.total_amount))}
                       </td>
 
                       <td className="px-5 py-4">
-                        <StatusBadge status={order.payment_status} />
+                        <StatusBadge status={item.payment_status} />
                       </td>
 
                       <td className="px-5 py-4">
                         <div className="flex justify-end">
                           <button
-                            onClick={() => openDetail(order)}
+                            onClick={() => openDetail(item)}
                             className="rounded-lg p-2 text-blue-600 hover:bg-blue-50"
                             title="Lihat detail"
                           >
@@ -215,57 +466,98 @@ export default function Transactions({ onMenuClick }: TransactionsProps) {
               <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-red-50 text-red-600">
                 <Receipt size={23} />
               </div>
+
               <div>
                 <p className="font-bold text-gray-900">
-                  {selectedOrder.order?.order_number ||
-                    selectedOrder.order_number}
+                  {order?.order_number}
                 </p>
+
                 <p className="text-xs text-gray-500">
-                  {selectedOrder.order?.customer_name ||
-                    selectedOrder.customer_name ||
-                    "Pelanggan umum"}
+                  {order?.customer_name || "Pelanggan umum"}
+                </p>
+
+                <p className="mt-1 text-xs text-gray-500">
+                  Kasir: {order?.cashier || "-"}
                 </p>
               </div>
             </div>
 
             <div className="space-y-3">
-              {(selectedOrder.items || []).map((item: any, index: number) => (
-                <div
-                  key={item.id || index}
-                  className="flex justify-between gap-4 text-sm"
-                >
-                  <div>
-                    <p className="font-semibold text-gray-800">
-                      {item.product_name || item.name}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {item.quantity} × {formatRupiah(item.price)}
-                    </p>
-                  </div>
-                  <p className="font-semibold text-gray-800">
-                    {formatRupiah(
-                      item.subtotal ?? item.quantity * item.price
-                    )}
-                  </p>
-                </div>
-              ))}
+              {(selectedOrder.items || []).map(
+                (item: any, index: number) => {
+                  const price = Number(
+                    item.unit_price ?? item.price ?? 0
+                  );
+
+                  const subtotal = Number(
+                    item.subtotal ?? price * item.quantity
+                  );
+
+                  return (
+                    <div
+                      key={item.id || index}
+                      className="flex justify-between gap-4 text-sm"
+                    >
+                      <div>
+                        <p className="font-semibold text-gray-800">
+                          {item.product_name || item.name}
+                        </p>
+
+                        <p className="text-xs text-gray-500">
+                          {item.quantity} × {formatRupiah(price)}
+                        </p>
+                      </div>
+
+                      <p className="font-semibold text-gray-800">
+                        {formatRupiah(subtotal)}
+                      </p>
+                    </div>
+                  );
+                }
+              )}
             </div>
 
-            <div className="border-t border-gray-200 pt-4">
-              <div className="flex justify-between font-bold text-gray-900">
+            <div className="space-y-2 border-t border-gray-200 pt-4">
+              <div className="flex justify-between text-sm text-gray-500">
+                <span>Metode Pembayaran</span>
+                <span className="uppercase">
+                  {order?.payment_method || "-"}
+                </span>
+              </div>
+
+              <div className="flex justify-between text-sm text-gray-500">
+                <span>Status Pembayaran</span>
+                <StatusBadge status={order?.payment_status} />
+              </div>
+
+              <div className="flex justify-between border-t border-gray-100 pt-3 font-bold text-gray-900">
                 <span>Total</span>
+
                 <span>
-                  {formatRupiah(
-                    selectedOrder.order?.total_amount ??
-                      selectedOrder.total_amount ??
-                      0
-                  )}
+                  {formatRupiah(Number(order?.total_amount || 0))}
                 </span>
               </div>
             </div>
+
+            <button
+              onClick={printInvoice}
+              disabled={order?.payment_status !== "paid"}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-600 py-3.5 font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+            >
+              <Printer size={18} />
+              Cetak Invoice
+            </button>
+
+            {order?.payment_status !== "paid" && (
+              <p className="text-center text-xs text-gray-400">
+                Invoice tersedia setelah pembayaran lunas.
+              </p>
+            )}
           </div>
         ) : (
-          <p className="text-sm text-gray-500">Detail transaksi tidak tersedia.</p>
+          <p className="text-sm text-gray-500">
+            Detail transaksi tidak tersedia.
+          </p>
         )}
       </Modal>
     </div>

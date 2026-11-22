@@ -43,7 +43,9 @@ export const dashboard = async (req: Request, res: Response) => {
 
     const recent = await pool.query(`
       SELECT
+        o.id,
         o.order_number,
+        o.customer_name,
         o.total_amount,
         o.payment_method,
         o.payment_status,
@@ -84,6 +86,7 @@ export const getProducts = async (req: Request, res: Response) => {
         p.name,
         p.description,
         p.price,
+        p.stock,
         p.image_url,
         p.is_available,
         p.created_at,
@@ -116,15 +119,14 @@ export const createProduct = async (req: Request, res: Response) => {
       name,
       description,
       price,
+      stock,
       is_available
     } = req.body;
 
-    // Mengambil URL foto dari Multer
     const image_url = req.file
       ? `/uploads/${req.file.filename}`
       : null;
 
-    // Validasi
     if (
       !category_id ||
       !name?.trim() ||
@@ -136,22 +138,41 @@ export const createProduct = async (req: Request, res: Response) => {
       });
     }
 
-    if (Number(price) < 0 || !Number.isFinite(Number(price))) {
+    if (!Number.isFinite(Number(price)) || Number(price) < 0) {
       return res.status(400).json({
         message: "Harga tidak valid"
       });
     }
 
+    const productStock = stock === undefined || stock === ""
+      ? 0
+      : Number(stock);
+
+    if (!Number.isInteger(productStock) || productStock < 0) {
+      return res.status(400).json({
+        message: "Stok harus berupa bilangan bulat dan tidak boleh negatif"
+      });
+    }
+
     const result = await pool.query(
       `INSERT INTO products
-       (category_id, name, description, price, image_url, is_available)
-       VALUES ($1, $2, $3, $4, $5, $6)
+       (
+         category_id,
+         name,
+         description,
+         price,
+         stock,
+         image_url,
+         is_available
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING *`,
       [
         category_id,
         name.trim(),
         description || null,
         Number(price),
+        productStock,
         image_url,
         is_available === undefined
           ? true
@@ -174,7 +195,6 @@ export const createProduct = async (req: Request, res: Response) => {
   }
 };
 
-
 // UPDATE PRODUCT
 export const updateProduct = async (req: Request, res: Response) => {
   try {
@@ -183,19 +203,35 @@ export const updateProduct = async (req: Request, res: Response) => {
       name,
       description,
       price,
+      stock,
       is_available
     } = req.body;
 
-    // Foto baru jika diupload
-    // Jika tidak ada foto baru, gunakan foto lama
     const image_url = req.file
       ? `/uploads/${req.file.filename}`
       : null;
 
-    if (price !== undefined && price !== "" &&
-      (!Number.isFinite(Number(price)) || Number(price) < 0)) {
+    if (
+      price !== undefined &&
+      price !== "" &&
+      (!Number.isFinite(Number(price)) || Number(price) < 0)
+    ) {
       return res.status(400).json({
         message: "Harga tidak valid"
+      });
+    }
+
+    const productStock =
+      stock !== undefined && stock !== ""
+        ? Number(stock)
+        : null;
+
+    if (
+      productStock !== null &&
+      (!Number.isInteger(productStock) || productStock < 0)
+    ) {
+      return res.status(400).json({
+        message: "Stok harus berupa bilangan bulat dan tidak boleh negatif"
       });
     }
 
@@ -205,9 +241,10 @@ export const updateProduct = async (req: Request, res: Response) => {
         name = COALESCE($2, name),
         description = COALESCE($3, description),
         price = COALESCE($4, price),
-        image_url = COALESCE($5, image_url),
-        is_available = COALESCE($6, is_available)
-       WHERE id = $7
+        stock = COALESCE($5, stock),
+        image_url = COALESCE($6, image_url),
+        is_available = COALESCE($7, is_available)
+       WHERE id = $8
        RETURNING *`,
       [
         category_id || null,
@@ -216,6 +253,7 @@ export const updateProduct = async (req: Request, res: Response) => {
         price !== undefined && price !== ""
           ? Number(price)
           : null,
+        productStock,
         image_url,
         is_available !== undefined
           ? is_available === "true"
@@ -244,7 +282,6 @@ export const updateProduct = async (req: Request, res: Response) => {
     });
   }
 };
-
 
 // DELETE PRODUCT
 export const deleteProduct = async (req: Request, res: Response) => {
