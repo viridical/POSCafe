@@ -312,11 +312,12 @@ export const deleteProduct = async (req: Request, res: Response) => {
 };
 
 
+
 // GET STAFF
 export const getStaff = async (req: Request, res: Response) => {
   try {
     const result = await pool.query(`
-      SELECT id, name, email, role, created_at
+      SELECT id, name, email, role, status, created_at
       FROM users
       ORDER BY id DESC
     `);
@@ -325,7 +326,6 @@ export const getStaff = async (req: Request, res: Response) => {
       status: "success",
       data: result.rows
     });
-
   } catch (error) {
     console.error("Get staff error:", error);
 
@@ -339,11 +339,20 @@ export const getStaff = async (req: Request, res: Response) => {
 // UPDATE STAFF
 export const updateStaff = async (req: Request, res: Response) => {
   try {
-    const { name, password } = req.body;
+    const { name, password, status } = req.body;
 
     if (password && password.length < 8) {
       return res.status(400).json({
         message: "Password minimal 8 karakter"
+      });
+    }
+
+    if (
+      status !== undefined &&
+      !["active", "resigned"].includes(status)
+    ) {
+      return res.status(400).json({
+        message: "Status tidak valid"
       });
     }
 
@@ -354,10 +363,16 @@ export const updateStaff = async (req: Request, res: Response) => {
     const result = await pool.query(
       `UPDATE users SET
         name = COALESCE($1, name),
-        password = COALESCE($2, password)
-       WHERE id = $3
-       RETURNING id, name, email, role, created_at`,
-      [name || null, hashed, req.params.id]
+        password = COALESCE($2, password),
+        status = COALESCE($3, status)
+       WHERE id = $4
+       RETURNING id, name, email, role, status, created_at`,
+      [
+        name || null,
+        hashed,
+        status || null,
+        req.params.id
+      ]
     );
 
     if (result.rowCount === 0) {

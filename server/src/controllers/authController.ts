@@ -15,7 +15,7 @@ export const login = async (req: Request, res: Response) => {
     }
 
     const result = await pool.query(
-      "SELECT id, name, email, password, role FROM users WHERE email = $1",
+      "SELECT id, name, email, password, role, status FROM users WHERE email = $1",
       [email]
     );
 
@@ -26,6 +26,12 @@ export const login = async (req: Request, res: Response) => {
     }
 
     const user = result.rows[0];
+
+    if (user.status !== "active") {
+      return res.status(403).json({
+        message: "Akun Anda sudah tidak aktif. Hubungi admin."
+      });
+    }
 
     const valid = await bcrypt.compare(password, user.password);
 
@@ -89,7 +95,7 @@ export const createUser = async (req: Request, res: Response) => {
     const result = await pool.query(
       `INSERT INTO users (name, email, password, role)
        VALUES ($1, $2, $3, $4)
-       RETURNING id, name, email, role`,
+       RETURNING id, name, email, role, status`,
       [name, email, hashedPassword, role]
     );
 

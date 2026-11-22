@@ -28,7 +28,7 @@ export async function createEmployee(data: {
 
 export async function updateEmployee(
   id: number,
-  data: { name?: string; password?: string }
+  data: { name?: string; password?: string; status?: "active" | "resigned"; }
 ) {
   return apiRequest(`/admin/staff/${id}`, {
     method: "PUT",
