@@ -32,7 +32,7 @@ interface ReportResponse {
 }
 
 const formatRupiah = (value: number) =>
-  `Rp${Number(value || 0).toLocaleString("id-ID")}`;
+  `Rp${Math.round(Number(value || 0)).toLocaleString("id-ID")}`;
 
 export default function Reports({
   onMenuClick,
